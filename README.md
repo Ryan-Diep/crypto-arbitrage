@@ -1,11 +1,18 @@
 # Crypto Arbitrage Monitor
 
-Real-time cryptocurrency arbitrage detection system across Coinbase and Binance exchanges.
+Real-time cryptocurrency arbitrage detection system across **Coinbase, Binance, Bybit, OKX**
 
 ## Architecture
 
-```
-Go Producer → Kafka → Java Consumer → REST API → React Dashboard
+```mermaid
+graph LR
+    A[Go Producer] -->|High Throughput| B(Kafka)
+    B --> C[Java Consumer]
+    C -->|REST API| D[React Dashboard]
+    E[Coinbase] --> A
+    F[Binance] --> A
+    G[Bybit] --> A
+    H[OKX] --> A
 ```
 
 ## Prerequisites
@@ -24,11 +31,11 @@ Go Producer → Kafka → Java Consumer → REST API → React Dashboard
 docker-compose up -d
 ```
 
-### 2. Setup Coinbase API Keys
+### 2. Setup API Keys
 
-Create `.env` file in root:
+Create a `.env` file in the root directory. Only Coinbase requires API keys for public ticker data.
 
-```env
+```
 COINBASE_API_KEY=your_api_key
 COINBASE_SECRET_KEY=-----BEGIN EC PRIVATE KEY-----
 your_secret_key
@@ -37,13 +44,17 @@ your_secret_key
 
 ### 3. Start Producer (Go)
 
+The producer automatically discovers symbols that exist on at least **2 exchanges** and streams them.
+
 ```bash
 cd producer
 go mod download
-go run main.go
+go run cmd/main.go
 ```
 
 ### 4. Start Consumer (Java)
+
+The consumer detects N-way arbitrage opportunities between any pair of exchanges.
 
 ```bash
 cd consumer
@@ -59,46 +70,18 @@ npm install
 npm start
 ```
 
-Visit `http://localhost:3000` to see the dashboard!
+Visit **http://localhost:3000** to see the live dashboard!
 
 ## Features
 
-- ✅ Auto-discovery of common trading pairs across exchanges
-- ✅ Real-time price streaming via WebSocket
-- ✅ Arbitrage detection with >1% spread threshold
-- ✅ Beautiful web dashboard with live updates
-- ✅ Filters out stale data and sub-penny differences
-- ✅ Quote currency matching (USD-USD, USDT-USDT, etc.)
+- ✅ **Multi-Exchange Support:** Tracks Coinbase, Binance, Bybit, and OKX simultaneously.
+- ✅ **Smart Auto-Discovery:** Finds assets listed on ≥2 exchanges.
+- ✅ **High-Frequency Streaming:** Handles 1,000+ messages/sec via Kafka.
+- ✅ **N-Way Arbitrage:** Detects best BUY and SELL opportunities.
+- ✅ **Live Dashboard:** Real-time price feeds, dynamic search, visual spread indicators.
+- ✅ **Resilience:** Automatic reconnection logic for WebSockets and Kafka.
 
 ## API Endpoints
 
-- `GET http://localhost:8080/api/opportunities` - Returns current arbitrage opportunities
-
-## Configuration
-
-### Producer (Go)
-- `MaxSymbols`: 500 (limit tracked symbols)
-- `RefreshInterval`: 6 hours (symbol list refresh)
-
-### Consumer (Java)
-- `MIN_SPREAD_THRESHOLD`: 1.0% (minimum profitable spread)
-- `STALE_DATA_MS`: 3000ms (data freshness window)
-
-## Troubleshooting
-
-**No opportunities showing?**
-- Check if both producer and consumer are running
-- Verify Kafka is running: `docker ps`
-- Check Java consumer logs for Kafka connection
-
-**Web dashboard not connecting?**
-- Ensure Java consumer is running on port 8080
-- Check CORS settings in ArbitrageController
-
-**Producer not connecting?**
-- Verify Coinbase API credentials in `.env`
-- Check network connectivity to exchanges
-
-## License
-
-MIT
+- `GET http://localhost:8081/api/opportunities` – Returns top arbitrage opportunities.
+- `GET http://localhost:8081/api/prices` – Returns live prices for all tracked symbols.

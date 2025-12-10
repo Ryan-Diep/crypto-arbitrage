@@ -1,5 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { TrendingUp, RefreshCw, DollarSign, Activity, ArrowRightLeft, Radio, Eye } from 'lucide-react';
+import { TrendingUp, RefreshCw, DollarSign, Activity, ArrowRightLeft, Radio, Eye, Zap, ChevronRight, Search } from 'lucide-react';
+
+// Configuration for supported exchanges and their visual themes
+const EXCHANGE_CONFIG = {
+  COINBASE: { color: 'blue', label: 'Coinbase', text: 'text-blue-400', bg: 'bg-blue-500' },
+  BINANCE: { color: 'yellow', label: 'Binance', text: 'text-yellow-400', bg: 'bg-yellow-500' },
+  BYBIT: { color: 'orange', label: 'Bybit', text: 'text-orange-400', bg: 'bg-orange-500' },
+  OKX: { color: 'white', label: 'OKX', text: 'text-white', bg: 'bg-slate-100' } // White/Black theme
+};
+
+const ORDERED_EXCHANGES = ['COINBASE', 'BINANCE', 'BYBIT', 'OKX'];
 
 const ArbitrageDashboard = () => {
   const [opportunities, setOpportunities] = useState([]);
@@ -14,47 +24,52 @@ const ArbitrageDashboard = () => {
   const [activeTab, setActiveTab] = useState('opportunities');
   const [livePrices, setLivePrices] = useState([]);
   const [priceUpdates, setPriceUpdates] = useState([]);
+  
+  const [searchQuery, setSearchQuery] = useState('');
+
   const prevUpdatesRef = useRef([]);
+  const [particles, setParticles] = useState([]);
+
+  useEffect(() => {
+    const newParticles = Array.from({ length: 50 }, (_, i) => ({
+      id: i,
+      x: Math.random() * 100,
+      y: Math.random() * 100,
+      size: Math.random() * 3 + 1,
+      duration: Math.random() * 20 + 10,
+      delay: Math.random() * 5
+    }));
+    setParticles(newParticles);
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch opportunities
         const oppResponse = await fetch('http://localhost:8081/api/opportunities');
         const oppData = await oppResponse.json();
         
         setOpportunities(oppData.opportunities || []);
-        setStats(oppData.stats || {
-          avgSpread: 0,
-          maxSpread: 0,
-          trackedSymbols: 0,
-          activeOpportunities: 0
+        setStats({
+          avgSpread: oppData.stats?.avgSpread ?? 0,
+          maxSpread: oppData.stats?.maxSpread ?? 0,
+          trackedSymbols: oppData.stats?.trackedSymbols ?? 0,
+          activeOpportunities: oppData.stats?.activeOpportunities ?? 0
         });
         setLastUpdate(new Date(oppData.lastUpdate));
         setIsConnected(true);
 
-        // Fetch all prices for live feed
         const pricesResponse = await fetch('http://localhost:8081/api/prices');
         const pricesData = await pricesResponse.json();
         
-        console.log('Prices API Response:', pricesData); // Debug log
-        
-        // Update prices table - keep all prices, don't filter by time
         if (pricesData.prices && Array.isArray(pricesData.prices)) {
           setLivePrices(pricesData.prices);
         }
         
-        // Update live feed with recent updates
         if (pricesData.updates && Array.isArray(pricesData.updates)) {
-          console.log('Updates received:', pricesData.updates.length); // Debug log
-          
-          // Only update if we have new data
           if (pricesData.updates.length > 0) {
             setPriceUpdates(pricesData.updates);
             prevUpdatesRef.current = pricesData.updates;
           }
-        } else {
-          console.log('No updates in response'); // Debug log
         }
         
       } catch (error) {
@@ -69,12 +84,26 @@ const ArbitrageDashboard = () => {
     return () => clearInterval(interval);
   }, []);
 
+  const filteredPrices = livePrices.filter(item => 
+    item.symbol.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   const getAgeIndicator = (timestamp) => {
     const age = Date.now() - timestamp;
-    if (age < 2000) return { symbol: '●', color: 'text-green-400', label: 'Fresh' };
-    if (age < 5000) return { symbol: '◐', color: 'text-yellow-400', label: 'Recent' };
-    return { symbol: '○', color: 'text-gray-400', label: 'Older' };
+    if (age < 2000) return { symbol: '●', color: 'text-emerald-400', label: 'Fresh' };
+    if (age < 5000) return { symbol: '◐', color: 'text-amber-400', label: 'Recent' };
+    return { symbol: '○', color: 'text-slate-500', label: 'Older' };
   };
+
+  const getExchangeStyle = (exchangeName) => {
+    const config = EXCHANGE_CONFIG[exchangeName] || { color: 'gray', text: 'text-gray-400', bg: 'bg-gray-500' };
+    return `${config.bg} bg-opacity-10 border border-${config.color}-500 border-opacity-30 ${config.text}`;
+  };
+
+  const getPriceStyle = (exchangeName) => {
+    const config = EXCHANGE_CONFIG[exchangeName] || { text: 'text-gray-400' };
+    return config.text;
+  }
 
   const formatTime = (date) => {
     return date.toLocaleTimeString('en-US', { 
@@ -96,360 +125,425 @@ const ArbitrageDashboard = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white p-6">
-      {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-3 rounded-xl">
-              <TrendingUp className="w-8 h-8" />
-            </div>
-            <div>
-              <h1 className="text-3xl font-bold">Crypto Arbitrage Monitor</h1>
-              <p className="text-gray-400 text-sm">Real-time cross-exchange opportunities</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className={`flex items-center gap-2 px-4 py-2 rounded-lg ${isConnected ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
-              <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-400' : 'bg-red-400'} animate-pulse`}></div>
-              <span className="text-sm font-medium">{isConnected ? 'Live' : 'Disconnected'}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-xl p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Activity className="w-5 h-5 text-blue-400" />
-              <span className="text-gray-400 text-sm">Active Opportunities</span>
-            </div>
-            <div className="text-3xl font-bold text-blue-400">{stats.activeOpportunities}</div>
-          </div>
-
-          <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-xl p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <TrendingUp className="w-5 h-5 text-green-400" />
-              <span className="text-gray-400 text-sm">Max Spread</span>
-            </div>
-            <div className="text-3xl font-bold text-green-400">{stats.maxSpread.toFixed(2)}%</div>
-          </div>
-
-          <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-xl p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <DollarSign className="w-5 h-5 text-yellow-400" />
-              <span className="text-gray-400 text-sm">Avg Spread</span>
-            </div>
-            <div className="text-3xl font-bold text-yellow-400">{stats.avgSpread.toFixed(2)}%</div>
-          </div>
-
-          <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-xl p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <ArrowRightLeft className="w-5 h-5 text-purple-400" />
-              <span className="text-gray-400 text-sm">Tracked Symbols</span>
-            </div>
-            <div className="text-3xl font-bold text-purple-400">{stats.trackedSymbols}</div>
-          </div>
-        </div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950 text-white overflow-hidden relative">
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        {particles.map((particle) => (
+          <div
+            key={particle.id}
+            className="absolute rounded-full bg-purple-500 opacity-20"
+            style={{
+              left: `${particle.x}%`,
+              top: `${particle.y}%`,
+              width: `${particle.size}px`,
+              height: `${particle.size}px`,
+              animation: `float ${particle.duration}s ease-in-out infinite`,
+              animationDelay: `${particle.delay}s`
+            }}
+          />
+        ))}
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-2 mb-4">
-        <button
-          onClick={() => setActiveTab('opportunities')}
-          className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold transition-all ${
-            activeTab === 'opportunities'
-              ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white'
-              : 'bg-gray-800/50 text-gray-400 hover:bg-gray-700/50'
-          }`}
-        >
-          <TrendingUp className="w-4 h-4" />
-          Arbitrage Opportunities
-        </button>
-        <button
-          onClick={() => setActiveTab('live-feed')}
-          className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold transition-all ${
-            activeTab === 'live-feed'
-              ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white'
-              : 'bg-gray-800/50 text-gray-400 hover:bg-gray-700/50'
-          }`}
-        >
-          <Radio className="w-4 h-4" />
-          Live Price Feed
-          {priceUpdates.length > 0 && (
-            <span className="bg-green-400 text-gray-900 text-xs px-2 py-0.5 rounded-full font-bold">
-              {priceUpdates.length}
-            </span>
-          )}
-        </button>
-      </div>
+      <div className="absolute inset-0 opacity-30" style={{
+        backgroundImage: 'linear-gradient(rgba(124,58,237,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(124,58,237,0.1) 1px, transparent 1px)',
+        backgroundSize: '50px 50px'
+      }} />
 
-      {/* Opportunities Table */}
-      {activeTab === 'opportunities' && (
-        <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-xl overflow-hidden">
-          <div className="bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-bold">Top 10 Opportunities by Spread</h2>
-              <div className="flex items-center gap-2 text-sm">
-                <RefreshCw className="w-4 h-4 animate-spin" />
-                <span>Last updated: {formatTime(lastUpdate)}</span>
+      <style>{`
+        @keyframes float {
+          0%, 100% { transform: translateY(0) translateX(0); }
+          25% { transform: translateY(-20px) translateX(10px); }
+          50% { transform: translateY(-10px) translateX(-10px); }
+          75% { transform: translateY(-30px) translateX(5px); }
+        }
+      `}</style>
+
+      <div className="relative z-10 p-6 max-w-[1800px] mx-auto">
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center gap-4">
+              <div className="relative">
+                <div className="absolute inset-0 bg-gradient-to-r from-cyan-500 to-purple-600 rounded-2xl blur-xl opacity-50 animate-pulse" />
+                <div className="relative bg-gradient-to-r from-cyan-500 to-purple-600 p-4 rounded-2xl">
+                  <TrendingUp className="w-8 h-8" />
+                </div>
+              </div>
+              <div>
+                <h1 className="text-4xl font-bold bg-gradient-to-r from-cyan-400 via-purple-400 to-pink-400 bg-clip-text text-transparent mb-1">
+                  Crypto Arbitrage Monitor
+                </h1>
+                <p className="text-slate-400 text-sm flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+                  Real-time multi-exchange surveillance
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className={`group relative px-6 py-3 rounded-xl backdrop-blur-xl transition-all duration-300 ${
+                isConnected 
+                  ? 'bg-emerald-500 bg-opacity-10 border border-emerald-500 border-opacity-20' 
+                  : 'bg-rose-500 bg-opacity-10 border border-rose-500 border-opacity-20'
+              }`}>
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-emerald-400' : 'bg-rose-400'}`}>
+                      <div className={`absolute inset-0 rounded-full ${isConnected ? 'bg-emerald-400' : 'bg-rose-400'} animate-ping`} />
+                    </div>
+                  </div>
+                  <span className="font-semibold">{isConnected ? 'Live Feed Active' : 'Disconnected'}</span>
+                </div>
               </div>
             </div>
           </div>
 
-          {opportunities.length === 0 ? (
-            <div className="px-6 py-16 text-center">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-700/50 mb-4">
-                <Activity className="w-8 h-8 text-gray-500" />
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            {[
+              { icon: Activity, label: 'Active Opportunities', value: stats.activeOpportunities, color: 'cyan', suffix: '' },
+              { icon: TrendingUp, label: 'Max Spread', value: Number(stats.maxSpread || 0).toFixed(2), color: 'emerald', suffix: '%' },
+              { icon: DollarSign, label: 'Avg Spread', value: Number(stats.avgSpread || 0).toFixed(2), color: 'amber', suffix: '%' },
+              { icon: ArrowRightLeft, label: 'Tracked Symbols', value: stats.trackedSymbols, color: 'purple', suffix: '' }
+            ].map((stat, idx) => (
+              <div 
+                key={idx}
+                className="group relative overflow-hidden"
+              >
+                <div className="absolute inset-0 bg-gradient-to-br from-slate-800 from-opacity-50 to-slate-900 to-opacity-50 rounded-2xl" />
+                <div className="relative backdrop-blur-xl border border-slate-700 border-opacity-50 rounded-2xl p-6 transition-all duration-300">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className={`p-3 rounded-xl bg-${stat.color}-500 bg-opacity-10 transition-transform duration-300`}>
+                      <stat.icon className={`w-6 h-6 text-${stat.color}-400`} />
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-slate-600 transition-all duration-300" />
+                  </div>
+                  <div className="space-y-2">
+                    <div className="text-slate-400 text-sm font-medium">{stat.label}</div>
+                    <div className={`text-4xl font-bold text-${stat.color}-400 transition-transform duration-300`}>
+                      {stat.value}{stat.suffix}
+                    </div>
+                  </div>
+                </div>
               </div>
-              <h3 className="text-xl font-semibold mb-2">No Opportunities Detected</h3>
-              <p className="text-gray-400 mb-4">Waiting for price discrepancies above 0.5% threshold...</p>
-              {stats.trackedSymbols > 0 && (
-                <div className="text-sm text-gray-500">
-                  Currently monitoring {stats.trackedSymbols} symbols. Check the "Live Price Feed" tab to see raw data.
+            ))}
+          </div>
+        </div>
+
+        <div className="flex gap-3 mb-6">
+          {[
+            { id: 'opportunities', label: 'Arbitrage Opportunities', icon: TrendingUp },
+            { id: 'live-feed', label: 'Live Price Feed', icon: Radio, badge: priceUpdates.length }
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`group relative flex items-center gap-3 px-8 py-4 rounded-xl font-semibold transition-all duration-300 ${
+                activeTab === tab.id
+                  ? 'text-white'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              {activeTab === tab.id && (
+                <>
+                  <div className="absolute inset-0 bg-gradient-to-r from-cyan-500 to-purple-600 rounded-xl" />
+                  <div className="absolute inset-0 bg-gradient-to-r from-cyan-500 to-purple-600 rounded-xl blur-xl opacity-50" />
+                </>
+              )}
+              {activeTab !== tab.id && (
+                <div className="absolute inset-0 bg-slate-800 bg-opacity-50 backdrop-blur-xl border border-slate-700 border-opacity-50 rounded-xl transition-all duration-300" />
+              )}
+              <tab.icon className="w-5 h-5 relative z-10" />
+              <span className="relative z-10">{tab.label}</span>
+              {tab.badge > 0 && (
+                <span className="relative z-10 px-3 py-1 bg-emerald-500 text-slate-900 text-xs rounded-full font-bold animate-pulse">
+                  {tab.badge}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {activeTab === 'opportunities' && (
+          <div className="relative overflow-hidden rounded-2xl">
+            <div className="absolute inset-0 bg-gradient-to-br from-slate-800 from-opacity-50 to-slate-900 to-opacity-50" />
+            <div className="relative backdrop-blur-xl border border-slate-700 border-opacity-50">
+              <div className="relative overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-r from-cyan-600 via-purple-600 to-pink-600" />
+                <div className="relative px-8 py-6">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Zap className="w-6 h-6" />
+                      <h2 className="text-2xl font-bold">Top Opportunities</h2>
+                    </div>
+                    <div className="flex items-center gap-3 text-sm backdrop-blur-xl bg-white bg-opacity-10 px-4 py-2 rounded-lg">
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Updated {formatTime(lastUpdate)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {opportunities.length === 0 ? (
+                <div className="px-8 py-20 text-center">
+                  <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-slate-700 from-opacity-50 to-slate-800 to-opacity-50 mb-6">
+                    <Activity className="w-10 h-10 text-slate-500" />
+                  </div>
+                  <h3 className="text-2xl font-bold mb-3">No Opportunities Detected</h3>
+                  <p className="text-slate-400 mb-4">Monitoring {stats.trackedSymbols} symbols across 4 exchanges...</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-slate-700 border-opacity-50">
+                        <th className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Rank</th>
+                        <th className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Symbol</th>
+                        <th className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Buy From</th>
+                        <th className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Sell To</th>
+                        <th className="px-6 py-4 text-right text-xs font-bold text-slate-400 uppercase tracking-wider">Buy Price</th>
+                        <th className="px-6 py-4 text-right text-xs font-bold text-slate-400 uppercase tracking-wider">Sell Price</th>
+                        <th className="px-6 py-4 text-right text-xs font-bold text-slate-400 uppercase tracking-wider">Spread</th>
+                        <th className="px-6 py-4 text-right text-xs font-bold text-slate-400 uppercase tracking-wider">Profit</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {opportunities.map((opp, idx) => {
+                        const ageInfo = getAgeIndicator(opp.timestamp);
+                        return (
+                          <tr 
+                            key={idx} 
+                            className="border-b border-slate-700 border-opacity-30 hover:bg-slate-700 hover:bg-opacity-20 transition-all duration-300 group"
+                          >
+                            <td className="px-6 py-5">
+                              <div className="flex items-center gap-3">
+                                <span className={`${ageInfo.color} text-xl`} title={ageInfo.label}>
+                                  {ageInfo.symbol}
+                                </span>
+                                <span className="font-bold text-slate-300">#{idx + 1}</span>
+                              </div>
+                            </td>
+                            <td className="px-6 py-5">
+                              <span className="font-bold text-lg">{opp.symbol}</span>
+                            </td>
+                            <td className="px-6 py-5">
+                              <span className={`px-4 py-2 rounded-lg text-sm font-semibold backdrop-blur-xl ${getExchangeStyle(opp.buyExchange)}`}>
+                                {opp.buyExchange}
+                              </span>
+                            </td>
+                            <td className="px-6 py-5">
+                              <span className={`px-4 py-2 rounded-lg text-sm font-semibold backdrop-blur-xl ${getExchangeStyle(opp.sellExchange)}`}>
+                                {opp.sellExchange}
+                              </span>
+                            </td>
+                            <td className="px-6 py-5 text-right font-mono text-slate-300">
+                              ${opp.buyPrice.toFixed(4)}
+                            </td>
+                            <td className="px-6 py-5 text-right font-mono text-slate-300">
+                              ${opp.sellPrice.toFixed(4)}
+                            </td>
+                            <td className="px-6 py-5 text-right">
+                              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg backdrop-blur-xl">
+                                <span className={`font-bold text-xl ${
+                                  opp.spread >= 2 ? 'text-emerald-400' :
+                                  opp.spread >= 1 ? 'text-amber-400' :
+                                  'text-orange-400'
+                                }`}>
+                                  {opp.spread.toFixed(2)}%
+                                </span>
+                              </div>
+                            </td>
+                            <td className="px-6 py-5 text-right">
+                              <span className="font-mono text-lg text-emerald-400 font-bold">
+                                ${opp.priceDiff.toFixed(2)}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               )}
             </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-700/50">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Rank</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Symbol</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Buy From</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Sell To</th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-300 uppercase tracking-wider">Buy Price</th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-300 uppercase tracking-wider">Sell Price</th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-300 uppercase tracking-wider">Spread</th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-300 uppercase tracking-wider">Profit ($)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-700">
-                  {opportunities.map((opp, idx) => {
-                    const ageInfo = getAgeIndicator(opp.timestamp);
-                    return (
-                      <tr key={idx} className="hover:bg-gray-700/30 transition-colors">
-                        <td className="px-4 py-4">
-                          <div className="flex items-center gap-2">
-                            <span className={`${ageInfo.color} text-lg`} title={ageInfo.label}>
-                              {ageInfo.symbol}
-                            </span>
-                            <span className="font-semibold text-gray-300">#{idx + 1}</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-4">
-                          <span className="font-bold text-white">{opp.symbol}</span>
-                        </td>
-                        <td className="px-4 py-4">
-                          <span className="px-3 py-1 bg-blue-500/20 text-blue-400 rounded-lg text-sm font-medium">
-                            {opp.buyExchange}
-                          </span>
-                        </td>
-                        <td className="px-4 py-4">
-                          <span className="px-3 py-1 bg-purple-500/20 text-purple-400 rounded-lg text-sm font-medium">
-                            {opp.sellExchange}
-                          </span>
-                        </td>
-                        <td className="px-4 py-4 text-right font-mono text-sm text-gray-300">
-                          ${opp.buyPrice.toFixed(4)}
-                        </td>
-                        <td className="px-4 py-4 text-right font-mono text-sm text-gray-300">
-                          ${opp.sellPrice.toFixed(4)}
-                        </td>
-                        <td className="px-4 py-4 text-right">
-                          <span className={`font-bold text-lg ${
-                            opp.spread >= 2 ? 'text-green-400' :
-                            opp.spread >= 1 ? 'text-yellow-400' :
-                            opp.spread >= 0.5 ? 'text-orange-400' :
-                            'text-gray-400'
-                          }`}>
-                            {opp.spread.toFixed(2)}%
-                          </span>
-                        </td>
-                        <td className="px-4 py-4 text-right">
-                          <span className="font-mono text-green-400">
-                            ${opp.priceDiff.toFixed(2)}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          <div className="px-6 py-4 bg-gray-700/30 border-t border-gray-700 flex items-center justify-between text-sm">
-            <div className="flex items-center gap-6">
-              <span className="text-gray-400">Legend:</span>
-              <div className="flex items-center gap-2">
-                <span className="text-green-400">●</span>
-                <span className="text-gray-300">Fresh (&lt;2s)</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-yellow-400">◐</span>
-                <span className="text-gray-300">Recent (2-5s)</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-gray-400">○</span>
-                <span className="text-gray-300">Older (&gt;5s)</span>
-              </div>
-            </div>
-            <div className="text-gray-400">
-              💡 Showing opportunities &gt;0.5% spread. Green ≥2%, Yellow ≥1%, Orange ≥0.5%
-            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Live Price Feed */}
-      {activeTab === 'live-feed' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Price Updates Stream */}
-          <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-xl overflow-hidden">
-            <div className="bg-gradient-to-r from-green-600 to-blue-600 px-6 py-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-bold flex items-center gap-2">
-                  <Radio className="w-5 h-5 animate-pulse" />
-                  Live Updates Stream
-                </h2>
-                <span className="text-sm">Last {Math.min(priceUpdates.length, 100)} updates</span>
-              </div>
-            </div>
-            
-            <div className="h-[600px] overflow-y-auto">
-              {priceUpdates.length === 0 ? (
-                <div className="flex items-center justify-center h-full text-gray-500">
-                  <div className="text-center">
-                    <Eye className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                    <p>Waiting for price updates...</p>
-                    <p className="text-xs mt-2">Check browser console for debug info</p>
+        {activeTab === 'live-feed' && (
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            <div className="relative overflow-hidden rounded-2xl h-[700px] flex flex-col">
+              <div className="absolute inset-0 bg-gradient-to-br from-slate-800 from-opacity-50 to-slate-900 to-opacity-50" />
+              <div className="relative flex-1 backdrop-blur-xl border border-slate-700 border-opacity-50 flex flex-col">
+                <div className="relative overflow-hidden shrink-0">
+                  <div className="absolute inset-0 bg-gradient-to-r from-emerald-600 to-cyan-600" />
+                  <div className="relative px-8 py-6">
+                    <div className="flex items-center justify-between">
+                      <h2 className="text-2xl font-bold flex items-center gap-3">
+                        <Radio className="w-6 h-6 animate-pulse" />
+                        Live Updates Stream
+                      </h2>
+                      <span className="text-sm backdrop-blur-xl bg-white bg-opacity-10 px-4 py-2 rounded-lg">
+                        Last {Math.min(priceUpdates.length, 100)} updates
+                      </span>
+                    </div>
                   </div>
                 </div>
-              ) : (
-                <div className="divide-y divide-gray-700">
-                  {priceUpdates.map((update, idx) => (
-                    <div 
-                      key={`${update.symbol}-${update.exchange}-${idx}`}
-                      className="px-4 py-3 hover:bg-gray-700/30 transition-colors"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <span className={`px-2 py-1 rounded text-xs font-bold ${
-                            update.exchange === 'COINBASE' 
-                              ? 'bg-blue-500/20 text-blue-400' 
-                              : 'bg-purple-500/20 text-purple-400'
-                          }`}>
-                            {update.exchange}
-                          </span>
-                          <span className="font-bold text-white">{update.symbol}</span>
-                        </div>
-                        <div className="text-right">
-                          <div className="font-mono text-green-400 font-bold">
-                            ${typeof update.price === 'number' ? update.price.toFixed(4) : update.price}
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            {formatTimeWithMs(update.timestamp)}
-                          </div>
-                        </div>
+                
+                <div className="overflow-y-auto flex-1">
+                  {priceUpdates.length === 0 ? (
+                    <div className="flex items-center justify-center h-full">
+                      <div className="text-center">
+                        <Activity className="w-8 h-8 text-slate-500 animate-pulse mx-auto mb-4" />
+                        <p className="text-slate-400">Waiting for price updates...</p>
                       </div>
                     </div>
-                  ))}
+                  ) : (
+                    <div>
+                      {priceUpdates.map((update, idx) => (
+                        <div 
+                          key={`${update.symbol}-${update.exchange}-${idx}`}
+                          className="px-6 py-4 border-b border-slate-700 border-opacity-30 hover:bg-slate-700 hover:bg-opacity-20 transition-all duration-300"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                              <span className={`px-3 py-1.5 rounded-lg text-xs font-bold backdrop-blur-xl ${getExchangeStyle(update.exchange)}`}>
+                                {update.exchange}
+                              </span>
+                              <span className="font-bold text-lg">{update.symbol}</span>
+                            </div>
+                            <div className="text-right">
+                              <div className="font-mono text-emerald-400 font-bold text-lg">
+                                ${typeof update.price === 'number' ? update.price.toFixed(4) : update.price}
+                              </div>
+                              <div className="text-xs text-slate-500 font-mono">
+                                {formatTimeWithMs(update.timestamp)}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          </div>
-
-          {/* Current Prices Table */}
-          <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-xl overflow-hidden">
-            <div className="bg-gradient-to-r from-purple-600 to-pink-600 px-6 py-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-bold flex items-center gap-2">
-                  <Eye className="w-5 h-5" />
-                  Current Prices by Symbol
-                </h2>
-                <span className="text-sm">{livePrices.length} symbols</span>
               </div>
             </div>
-            
-            <div className="h-[600px] overflow-y-auto">
-              {livePrices.length === 0 ? (
-                <div className="flex items-center justify-center h-full text-gray-500">
-                  <div className="text-center">
-                    <Activity className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                    <p>No price data yet...</p>
-                    <p className="text-xs mt-2">Waiting for first poll...</p>
+
+            <div className="relative overflow-hidden rounded-2xl h-[700px] flex flex-col">
+              <div className="absolute inset-0 bg-gradient-to-br from-slate-800 from-opacity-50 to-slate-900 to-opacity-50" />
+              <div className="relative flex-1 backdrop-blur-xl border border-slate-700 border-opacity-50 flex flex-col">
+                <div className="relative overflow-hidden shrink-0">
+                  <div className="absolute inset-0 bg-gradient-to-r from-purple-600 to-pink-600" />
+                  <div className="relative px-8 py-6">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <Eye className="w-6 h-6" />
+                        <h2 className="text-2xl font-bold">Current Prices</h2>
+                      </div>
+                      
+                      <div className="flex items-center gap-3">
+                         <div className="relative">
+                           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
+                           <input 
+                             type="text" 
+                             placeholder="Search..."
+                             value={searchQuery}
+                             onChange={(e) => setSearchQuery(e.target.value)}
+                             className="pl-9 pr-4 py-2 bg-slate-900 bg-opacity-40 border border-slate-500 border-opacity-30 rounded-lg text-sm text-white placeholder-slate-300 focus:outline-none focus:border-white transition-all w-32 md:w-48"
+                           />
+                         </div>
+                        <span className="text-sm backdrop-blur-xl bg-white bg-opacity-10 px-4 py-2 rounded-lg">
+                          {filteredPrices.length}
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 </div>
-              ) : (
-                <table className="w-full">
-                  <thead className="bg-gray-700/50 sticky top-0">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">Symbol</th>
-                      <th className="px-4 py-3 text-right text-xs font-semibold text-gray-300 uppercase">Coinbase</th>
-                      <th className="px-4 py-3 text-right text-xs font-semibold text-gray-300 uppercase">Binance</th>
-                      <th className="px-4 py-3 text-right text-xs font-semibold text-gray-300 uppercase">Spread</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-700">
-                    {livePrices.map((item) => {
-                      const hasSpread = item.spreadPercent !== undefined && item.spreadPercent !== null;
-                      const cbAge = item.coinbaseAge || 0;
-                      const bnAge = item.binanceAge || 0;
-                      const cbFresh = cbAge <= 5000;
-                      const bnFresh = bnAge <= 5000;
-                      const bothFresh = item.bothFresh || false;
-                      
-                      return (
-                        <tr key={item.symbol} className={`hover:bg-gray-700/30 ${bothFresh && hasSpread && item.spreadPercent >= 0.5 ? 'bg-green-900/10' : ''}`}>
-                          <td className="px-4 py-3 font-bold text-white">
-                            {item.symbol}
-                            {bothFresh && hasSpread && item.spreadPercent >= 0.5 && (
-                              <span className="ml-2 text-xs text-green-400">⚡</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 text-right font-mono text-sm">
-                            {item.coinbasePrice !== undefined && item.coinbasePrice !== null ? (
-                              <div className="flex flex-col items-end">
-                                <span className={cbFresh ? "text-blue-400" : "text-gray-600"}>${item.coinbasePrice.toFixed(4)}</span>
-                                <span className="text-xs text-gray-600">{(cbAge / 1000).toFixed(1)}s</span>
-                              </div>
-                            ) : (
-                              <span className="text-gray-600">-</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 text-right font-mono text-sm">
-                            {item.binancePrice !== undefined && item.binancePrice !== null ? (
-                              <div className="flex flex-col items-end">
-                                <span className={bnFresh ? "text-purple-400" : "text-gray-600"}>${item.binancePrice.toFixed(4)}</span>
-                                <span className="text-xs text-gray-600">{(bnAge / 1000).toFixed(1)}s</span>
-                              </div>
-                            ) : (
-                              <span className="text-gray-600">-</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            {hasSpread ? (
-                              <span className={`font-mono text-sm ${
-                                bothFresh && item.spreadPercent >= 0.5 ? 'text-green-400 font-bold' : 'text-gray-500'
-                              }`}>
-                                {item.spreadPercent.toFixed(2)}%
-                              </span>
-                            ) : (
-                              <span className="text-gray-600">-</span>
-                            )}
-                          </td>
+                
+                <div className="overflow-y-auto flex-1">
+                  {livePrices.length === 0 ? (
+                    <div className="flex items-center justify-center h-full">
+                      <div className="text-center">
+                        <Activity className="w-8 h-8 text-slate-500 animate-pulse mx-auto mb-4" />
+                        <p className="text-slate-400">No price data yet...</p>
+                      </div>
+                    </div>
+                  ) : filteredPrices.length === 0 ? (
+                    <div className="flex items-center justify-center h-full">
+                      <p className="text-slate-400">No symbols match your search.</p>
+                    </div>
+                  ) : (
+                    <table className="w-full">
+                      <thead className="sticky top-0 backdrop-blur-xl bg-slate-800 bg-opacity-80 z-10">
+                        <tr className="border-b border-slate-700 border-opacity-50">
+                          <th className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase">Symbol</th>
+                          {ORDERED_EXCHANGES.map(ex => (
+                            <th key={ex} className="px-6 py-4 text-right text-xs font-bold text-slate-400 uppercase">{EXCHANGE_CONFIG[ex]?.label || ex}</th>
+                          ))}
+                          <th className="px-6 py-4 text-right text-xs font-bold text-slate-400 uppercase">Spread</th>
                         </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              )}
+                      </thead>
+                      <tbody>
+                        {filteredPrices.map((item) => {
+                          const hasSpread = item.spreadPercent !== undefined && item.spreadPercent !== null;
+                          const bothFresh = item.bothFresh || false;
+                          
+                          return (
+                            <tr 
+                              key={item.symbol} 
+                              className={`border-b border-slate-700 border-opacity-30 hover:bg-slate-700 hover:bg-opacity-20 transition-all duration-300 ${
+                                bothFresh && hasSpread && item.spreadPercent >= 0.5 ? 'bg-emerald-500 bg-opacity-5' : ''
+                              }`}
+                            >
+                              <td className="px-6 py-4 font-bold">
+                                <div className="flex items-center gap-2">
+                                  {item.symbol}
+                                  {bothFresh && hasSpread && item.spreadPercent >= 0.5 && (
+                                    <Zap className="w-4 h-4 text-emerald-400" />
+                                  )}
+                                </div>
+                              </td>
+                              
+                              {ORDERED_EXCHANGES.map(ex => {
+                                const price = item[ex];
+                                const age = item[`${ex}_age`];
+                                const exists = price !== undefined && price !== null;
+                                const isFresh = exists && age <= 5000;
+
+                                return (
+                                  <td key={ex} className="px-6 py-4 text-right font-mono text-sm">
+                                    {exists ? (
+                                      <div className="flex flex-col items-end">
+                                        <span className={isFresh ? getPriceStyle(ex) + " font-semibold" : "text-slate-600"}>
+                                          ${price.toFixed(4)}
+                                        </span>
+                                        <span className="text-xs text-slate-600">{(age / 1000).toFixed(1)}s</span>
+                                      </div>
+                                    ) : (
+                                      <span className="text-slate-700 text-xs">-</span>
+                                    )}
+                                  </td>
+                                );
+                              })}
+
+                              <td className="px-6 py-4 text-right">
+                                {hasSpread ? (
+                                  <span className={`font-mono text-sm font-semibold ${
+                                    bothFresh && item.spreadPercent >= 0.5 ? 'text-emerald-400' : 'text-slate-500'
+                                  }`}>
+                                    {item.spreadPercent.toFixed(2)}%
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-600">-</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 };
